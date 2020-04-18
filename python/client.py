@@ -3,7 +3,10 @@ import struct
 import threading
 import time
 
+from .lib.protocol import Protocol
+
 SVC_NAME = 'RECH_'  # Name of the service for broadcasting
+PROTOCOL = Protocol()
 
 
 # noinspection PyShadowingNames
@@ -50,22 +53,26 @@ def find_server():
 
 
 try:
+    # Ask for nickname
+    nickname = str(input('Nickname: '))
+
+    # Server connection
     host, port = find_server()
     server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     server.connect((host, port))
     print('> Connected to server at {}\n'.format((host, port)))
     threading.Thread(target=handle_message, args=(server, (host, port))).start()
+
+    # Set nickname
+    server.sendall(PROTOCOL.nickname(nickname))
+
     while True:
         msg = input()
         if msg == 'exit':
-            server.sendall('{"op": 0}'.encode())
+            server.sendall(PROTOCOL.exit())
             break
         else:
-            server.sendall(('{"op": 1, "message": "' + msg + '"}').encode())
-        time.sleep(0.5)
+            server.sendall(PROTOCOL.message(msg))
+        time.sleep(0.3)
 except KeyboardInterrupt:
     print("Exiting..")
-#
-# data = s.recv(1024)
-
-# print('Received', repr(data))

@@ -6,10 +6,14 @@ import threading
 import time
 import types
 
+from .lib.client import Client
+from .lib.protocol import Protocol
+
 eventHandler = selectors.DefaultSelector()
 
 SVC_NAME = 'RECH_'  # Name of the service for broadcasting
 CLIENTS = []
+PROTOCOL = Protocol()
 
 
 # noinspection PyShadowingNames
@@ -19,7 +23,7 @@ def accept(socket):
     print("> Accepted connection ", addr)
     data = types.SimpleNamespace(addr=addr, inb=b'', outb=b'')
     eventHandler.register(conn, selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
-    CLIENTS.append(conn)
+    CLIENTS.append(Client(conn))
 
 
 # noinspection PyShadowingNames
@@ -45,14 +49,18 @@ def handle_message(client, addr, event):
                 eventHandler.unregister(client)
                 CLIENTS.remove(client)
                 client.close()
-            else:
-                print("> Echoing '{}' to {}".format(message, addr))
+            elif message['op'] == 1:
+                # Set nickname
+
+            elif message['op'] == 2:
                 broadcast(message['message'])
+            else:
+                print("Unknown OP")
 
 
 def broadcast(message):
     for client in CLIENTS:
-        client.sendall(message.encode())
+        client.sendall(PROTOCOL.message(message))
 
 
 def start_announcing(port: int):
