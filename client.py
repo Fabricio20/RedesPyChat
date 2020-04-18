@@ -3,9 +3,7 @@ import struct
 import threading
 import time
 
-HOST = '::1'  # The server's hostname or IP address
-PORT = 62642  # The port used by the server
-CONNECTED = False
+SVC_NAME = 'RECH_'  # Name of the service for broadcasting
 
 
 # noinspection PyShadowingNames
@@ -24,40 +22,39 @@ def handle_message(server: socket, addr):
             print(">> {}".format(message.decode()))
 
 
+# Service discovery
 def find_server():
-    group = 'ff15::1'  # IPv6 Multicast (Site-Local)
-
-    # Look up multicast group address in name server and find out IP version
-    addrinfo = socket.getaddrinfo(group, None)[0]
-
-    # Create a socket
-    s = socket.socket(addrinfo[0], socket.SOCK_DGRAM)
-
-    # Allow multiple copies of this program on one machine
-    # (not strictly needed)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-    # Bind it to the port
-    s.bind(('', 1900))
-
-    group_bin = socket.inet_pton(addrinfo[0], addrinfo[4][0])
-    # Join group
-    mreq = group_bin + struct.pack('@I', 0)
-    s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mreq)
-
-    # Loop, printing any data we receive
+    print("Waiting for server announcement...")
+    # Create UDP socket server
+    skt = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+    # Allow port sharing
+    skt.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    # Bind
+    skt.bind(('', 1900))
+    # Join multicast group
+    group_bin = socket.inet_pton(socket.AF_INET6, 'FF15::1')
+    mc_req = group_bin + struct.pack('@I', 0)
+    skt.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mc_req)
+    # Wait for server broadcast
     while True:
-        data, sender = s.recvfrom(1500)
-        while data[-1:] == '\0': data = data[:-1]  # Strip trailing \0's
-        print(str(sender) + '  ' + repr(data))
+        data, sender = skt.recvfrom(1400)
+        data = data.decode()
+        if not data.startswith(SVC_NAME):
+            continue
+        # Strip trailing 0
+        while data[-1:] == '\0':
+            data = data[:-1]
+        sv_host = sender[0]
+        sv_port = int(data[len(SVC_NAME):])
+        return sv_host, sv_port
 
 
 try:
-    find_server()
+    host, port = find_server()
     server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    server.connect((HOST, PORT))
-    print('> Connected to {}\n'.format((HOST, PORT)))
-    threading.Thread(target=handle_message, args=(server, (HOST, PORT))).start()
+    server.connect((host, port))
+    print('> Connected to server at {}\n'.format((host, port)))
+    threading.Thread(target=handle_message, args=(server, (host, port))).start()
     while True:
         msg = input()
         if msg == 'exit':
