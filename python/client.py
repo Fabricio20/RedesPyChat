@@ -1,28 +1,37 @@
+import json
+import os
 import socket
 import struct
 import threading
 import time
 
-from .lib.protocol import Protocol
+from lib.protocol import Protocol
 
 SVC_NAME = 'RECH_'  # Name of the service for broadcasting
 PROTOCOL = Protocol()
 
 
 # noinspection PyShadowingNames
-def handle_message(server: socket, addr):
+def handle_message(server: socket):
     while True:
-        message = b''
         try:
-            recv_data = server.recv(1024)
+            msg = server.recv(1024)
         except socket.error:
-            print('> Prematurely Ended connection to {}'.format(addr))
-            server.close()
+            print('> Error during transmission.')
+            os._exit(1)
             return
-        if recv_data:
-            message += recv_data
-        if message:
-            print(">> {}".format(message.decode()))
+        # Payload decoding
+        message = json.loads(msg.decode())
+        op = message['op']
+        if op == -1:  # Exit
+            print("Error during communication: {}".format(message['message']))
+            server.close()
+            os._exit(1)
+            return
+        elif op == 2:  # Broadcast message
+            print(message['name'] + ": " + message['message'])
+        else:  # Unknown
+            print("> Received unknown OP {}".format(message))
 
 
 # Service discovery
@@ -61,7 +70,7 @@ try:
     server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     server.connect((host, port))
     print('> Connected to server at {}\n'.format((host, port)))
-    threading.Thread(target=handle_message, args=(server, (host, port))).start()
+    threading.Thread(target=handle_message, args=([server])).start()
 
     # Set nickname
     server.sendall(PROTOCOL.nickname(nickname))

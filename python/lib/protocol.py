@@ -1,5 +1,11 @@
 class Protocol:
 
+    # OP -1
+    # Forcefully closed by server (error)
+    @staticmethod
+    def close(message: str) -> bytes:
+        return ('{"op": -1, "message": "' + message + '"}').encode()
+
     # OP 0
     # Exit chat connection
     @staticmethod
@@ -15,5 +21,8 @@ class Protocol:
     # OP 2
     # Broadcast chat Message
     @staticmethod
-    def message(message: str) -> bytes:
-        return ('{"op": 2, "message": "' + message + '"}').encode()
+    def message(message: str, name: str = None) -> bytes:
+        if name is None:
+            return ('{"op": 2, "message": "' + message + '"}').encode()
+        else:
+            return ('{"op": 2, "message": "' + message + '", "name": "' + name + '"}').encode()

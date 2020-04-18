@@ -1,66 +1,58 @@
 import json
-import selectors
 import socket
 import struct
 import threading
 import time
-import types
 
-from .lib.client import Client
-from .lib.protocol import Protocol
-
-eventHandler = selectors.DefaultSelector()
+from lib.client import Client
+from lib.protocol import Protocol
 
 SVC_NAME = 'RECH_'  # Name of the service for broadcasting
-CLIENTS = []
+USERS = []
 PROTOCOL = Protocol()
 
 
 # noinspection PyShadowingNames
 def accept(socket):
     conn, addr = socket.accept()
-    conn.setblocking(False)
-    print("> Accepted connection ", addr)
-    data = types.SimpleNamespace(addr=addr, inb=b'', outb=b'')
-    eventHandler.register(conn, selectors.EVENT_READ | selectors.EVENT_WRITE, data=data)
-    CLIENTS.append(Client(conn))
+    print("> Accepted connection from {}".format(addr))
+    client = Client(conn)
+    USERS.append(client)
+    threading.Thread(target=handle_messages, args=([client])).start()
 
 
-# noinspection PyShadowingNames
-def handle_message(client, addr, event):
-    message = b''
-    if event & selectors.EVENT_READ:
+def handle_messages(client: Client):
+    while True:
         try:
-            recv_data = client.recv(1024)
+            msg = client.socket.recv(1024)
         except socket.error:
-            print('> Prematurely Ended connection from {}'.format(addr))
-            eventHandler.unregister(client)
-            CLIENTS.remove(client)
+            print('> Prematurely Ended connection from {}'.format(client))
+            USERS.remove(client)
             client.close()
             return
-        if recv_data:
-            message += recv_data
-    if event & selectors.EVENT_WRITE:
-        if message:
-            print("> Received {} from {}".format(message.decode(), addr))
-            message = json.loads(message.decode())
-            if message['op'] == 0:
-                print("> Closing connection to {}".format(addr))
-                eventHandler.unregister(client)
-                CLIENTS.remove(client)
-                client.close()
-            elif message['op'] == 1:
-                # Set nickname
-
-            elif message['op'] == 2:
-                broadcast(message['message'])
-            else:
-                print("Unknown OP")
-
-
-def broadcast(message):
-    for client in CLIENTS:
-        client.sendall(PROTOCOL.message(message))
+        # Payload decoding
+        message = json.loads(msg.decode())
+        op = message['op']
+        if op == 0:  # Exit
+            print("> Closing connection to {}".format(client))
+            USERS.remove(client)
+            client.close()
+            return
+        elif op == 1:  # Set nickname
+            name = message['name']
+            # Prevent name hijacking
+            for user in USERS:
+                if user.name == name:
+                    client.send(PROTOCOL.close('Duplicate nickname'))
+                    USERS.remove(client)
+                    client.close()
+                    return
+            client.name = message['name']
+        elif op == 2:  # Broadcast message
+            for user in USERS:
+                user.send(PROTOCOL.message(message['message'], client.name))
+        else:  # Unknown
+            print("> Received unknown OP from {}".format(client))
 
 
 def start_announcing(port: int):
@@ -82,23 +74,12 @@ try:
     sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     sock.bind(('::', 0))
     sock.listen()
-
     print("Listening on {} at port {}".format(sock.getsockname()[0], sock.getsockname()[1]))
+
+    # Announce
     threading.Thread(target=start_announcing, args=([sock.getsockname()[1]])).start()
 
-    sock.setblocking(False)
-    eventHandler.register(sock, selectors.EVENT_READ, data=None)
     while True:
-        try:
-            events = eventHandler.select(timeout=None)
-            for key, mask in events:
-                if key.data is None:
-                    accept(key.fileobj)
-                else:
-                    handle_message(key.fileobj, key.data.addr, mask)
-        except socket.error as exception:
-            print('Error during event loop', exception)
+        accept(sock)
 except KeyboardInterrupt:
     print("Exiting..")
-finally:
-    eventHandler.close()
