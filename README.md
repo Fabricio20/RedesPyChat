@@ -3,6 +3,20 @@
 IPv6-only auto-discovery chat service written in Python.
 Proof of Concept for my network engineering class.
 
+#### Usage:
+
+**Warning**: Requires Python 3+ and (at least local) IPv6 connectivity.
+
+To start the server:
+```
+python server.py
+```
+
+To start the client:
+```
+python client.py
+```
+
 #### Protocol:
 
 The protocol is JSON-based.
