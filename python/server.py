@@ -7,9 +7,9 @@ import time
 from lib.client import Client
 from lib.protocol import Protocol
 
-SVC_NAME = 'RECH_'  # Name of the service for broadcasting
-USERS = []
 PROTOCOL = Protocol()
+SVC_NAME = PROTOCOL.SERVICE_NAME  # Name of the service for broadcasting
+USERS = []
 
 
 # noinspection PyShadowingNames
@@ -21,12 +21,13 @@ def accept(socket):
     threading.Thread(target=handle_messages, args=([client])).start()
 
 
+# Server message loop
 def handle_messages(client: Client):
     while True:
         try:
             msg = client.socket.recv(1024)
         except socket.error:
-            print('> Prematurely Ended connection from {}'.format(client))
+            print('> {} Closed. [Error]'.format(client))
             USERS.remove(client)
             client.close()
             return
@@ -34,7 +35,7 @@ def handle_messages(client: Client):
         message = json.loads(msg.decode())
         op = message['op']
         if op == 0:  # Exit
-            print("> Closing connection to {}".format(client))
+            print("> {} Closed.".format(client))
             USERS.remove(client)
             client.close()
             return
@@ -46,6 +47,7 @@ def handle_messages(client: Client):
                     client.send(PROTOCOL.close('Duplicate nickname'))
                     USERS.remove(client)
                     client.close()
+                    print('> {} Closed. [Forced]'.format(client))
                     return
             client.name = message['name']
         elif op == 2:  # Broadcast message

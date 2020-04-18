@@ -1,5 +1,8 @@
 class Protocol:
 
+    # Name of the service (used for multicast announcements)
+    SERVICE_NAME = 'RECH_'
+
     # OP -1
     # Forcefully closed by server (error)
     @staticmethod
