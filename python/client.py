@@ -175,8 +175,18 @@ try:
             server.sendall(PROTOCOL.disconnect())
             break
         else:
-            if not handle_commands(msg, server):
-                server.sendall(PROTOCOL.message('Fabricio20', msg))
+            if handle_commands(msg, server):
+                continue
+            if ':' in msg:
+                args = msg.split(':')
+                target = args[0]
+                message = ' '.join(args[1:])
+                server.sendall(PROTOCOL.message(target, message))
+            else:
+                print_err('>> Usage [Channel]: #channel: Message')
+                print_err('>> Usage [DMs]: username: Message')
+                print_err('>> Usage [Global]: *: Message')
+                print_err('>> Usage [Local]: &: Message')
         time.sleep(0.3)
 except KeyboardInterrupt:
     print("Exiting..")
